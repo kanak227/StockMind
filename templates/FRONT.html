@@ -92,8 +92,10 @@
  
       loadingText.style.display = 'block'; 
  
-      try { 
-        const response = await fetch(`/analyze_company?company_name=${encodeURIComponent(companyName)}`); 
+      try {
+        // Get the current hostname and use it for the API call
+        const apiUrl = window.location.origin;
+        const response = await fetch(`${apiUrl}/analyze_company?company_name=${encodeURIComponent(companyName)}`); 
         const data = await response.json(); 
  
         if (data.success) { 
