@@ -1,10 +1,20 @@
-from flask import Flask, request, jsonify, render_template 
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, session
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+import jwt
+import datetime
+from functools import wraps
 import requests 
 import yfinance as yf 
 import wikipedia 
 from google import genai 
 from dotenv import load_dotenv 
 import os
+import secrets
+import authenticator
+from alert_system.scheduler import start_scheduler, alerts
+from flask_session import Session
 from flask_cors import CORS
 
 # Load environment variables from .env file
@@ -65,6 +75,84 @@ except Exception as e:
     # We'll handle this in the query_gemini_llm function
 app = Flask(__name__, static_folder="static", template_folder="templates") 
 CORS(app)  # Enable CORS for all routes
+
+
+#INITIAILIZE APP
+app = Flask(__name__, static_folder="static", template_folder="templates")
+
+# Configuration
+app.config['SECRET_KEY'] = secrets.token_hex(32)  # Change this in production!
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///stockmind.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['JWT_SECRET_KEY'] = secrets.token_hex(32)  # For API tokens
+app.config['SESSION_TYPE'] = 'filesystem' #using server side session cookies - filesystem
+
+# Initialize Flask extensions
+db = SQLAlchemy(app)
+Session(app)
+
+# Load API keys 
+GEMINI_API_KEY = "your_gemini_apikey"  # GeminiAPIKey 
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ALPHA_VANTAGE_API_KEY = "your_alpha_vantage_key"  # AlphaVantageAPIKey 
+client = genai.Client(api_key=GEMINI_API_KEY)
+
+
+@app.route('/alert_form')
+def alert_form():
+    return render_template('alert_form.html')
+@app.route('/alerts')
+
+@app.route('/create_alert', methods=['POST'])
+def create_alert():
+    data = request.form
+    alerts.append({
+        'type': data.get('type'),             # "price" or "rsi"
+        'ticker': data.get('ticker'),
+        'target': float(data.get('target', 0)),
+        'threshold': float(data.get('threshold', 30)),
+        'direction': data.get('direction'),
+        'email': data.get('email')
+    })
+    flash(f"Alert created for {data.get('ticker')}", "success")
+    return redirect('/')
+
+start_scheduler()
+
+# User model
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key = True)
+    username = db.Column(db.String(50), nullable = False)
+    email = db.Column(db.String(120), unique=True, nullable = False)
+    password_hash = db.Column(db.String(200), nullable = False)
+    def set_passsword(self, passw):
+        self.password_hash = generate_password_hash(passw)
+    def check_password(self, passw):
+        return check_password_hash(self.password_hash, passw)
+    def get_passw_hash(self):
+        return self.password_hash
+
+# JWT token required decorator for API routes
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        
+        if 'Authorization' in request.headers:
+            token = request.headers['Authorization'].split(" ")[1]
+            
+        if not token:
+            return jsonify({'message': 'Token is missing!'}), 401
+            
+        try:
+            data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=["HS256"])
+            current_user = User.query.filter_by(id=data['user_id']).first()
+        except:
+            return jsonify({'message': 'Token is invalid!'}), 401
+            
+        return f(current_user, *args, **kwargs)
+        
+    return decorated
 
 def fetch_wikipedia_summary(company_name): 
     try: 
@@ -377,3 +465,131 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 12001))
     host = os.getenv("HOST", "0.0.0.0")
     app.run(host=host, port=port, debug=True)
+def userAuthenticate():
+    '''use inside route functions to block logged out user'''
+    if "username" in session:
+        return True
+    return False
+
+# Authentication Routes
+@app.route("/login", methods = ['POST'])
+def login():
+    email = request.form['email']
+    password = request.form['password']
+    if(not email or not password):
+        return render_template("access-account.html", error = "Invalid Information, Please try again")
+    user = User.query.filter_by(email = email).first()
+    if(user and user.check_password(password)):
+        username = user.username
+        session["username"] = username
+        return redirect(url_for("home"))
+    else:
+        return render_template("access-account.html", error = "Invalid Information")
+        
+
+@app.route("/register", methods = ['POST'])
+def register():
+    username = request.form['username']
+    email = request.form['email']
+    password = request.form['password']
+    if(not username or not email or not password):
+        return render_template("access-account.html", error = "Invalid Information, Please try again")
+    user = User.query.filter_by(email = email).first()
+    if user:
+        return render_template("access-account.html", error="Account Already Exist")
+    else:
+        new_user = User(username = username, email = email)
+        new_user.set_passsword(password)
+        session['username'] = username
+        session['password'] = new_user.get_passw_hash()
+        session['email'] = email
+        return redirect(url_for('auth'))
+    
+@app.route('/api/auth')
+def auth():
+    username = session['username']
+    email = session['email']
+    try:
+        otp =  authenticator.generateOTP(username=username, usermail=email)
+        session["otp"] = otp
+    except:
+        return render_template("access-account.html", error = "Invalid email address")
+    return render_template("access-account.html", otp = True)
+
+@app.route('/api/verify', methods = ['POST'])
+def verify():
+    inp = request.form['userOTP']
+    username = session["username"]
+    password= session["password"]
+    email = session["email"]
+    otp = session["otp"]
+    session.pop("password",None)
+    session.pop("email",None)
+    session.pop("otp",None)
+    authSuccess = authenticator.verifyOTP(otp, inp)
+    if(authSuccess):
+        newUser = User(username = username , email = email, password_hash = password)
+        #registering the user in database
+        db.session.add(newUser)
+        db.session.commit()
+        return redirect(url_for('home'))
+    else:
+        session.pop("username",None)
+        return render_template("FRONT.html", error = "❌ Invalid OTP")
+    
+@app.route('/logout')
+def logout():
+    session.pop("username", None)
+    return redirect(url_for('home'))
+@app.route('/access-account')
+def accessAccount():
+    return render_template("access-account.html")
+
+# Protect existing routes
+@app.route("/")
+def home():
+    return render_template("FRONT.html")
+
+@app.route("/analyze_company", methods=["GET"])
+def analyze_company():
+    if not userAuthenticate():
+        return render_template("FRONT.html", error = "Please Sign In to continue")
+    company_name = request.args.get("company_name")
+    if not company_name:
+        return jsonify(success=False, error="No company name provided.")
+
+    _, summary = fetch_wikipedia_summary(company_name)
+    if not summary:
+        return jsonify(success=False, error="Could not find company description.")
+
+    ticker = get_ticker_from_alpha_vantage(company_name)
+    if not ticker:
+        return jsonify(success=False, error="Could not find ticker symbol.")
+
+    stock_prices, time_labels = fetch_stock_price(ticker)
+    if not stock_prices or not time_labels:
+        return jsonify(success=False, error="Could not fetch stock prices.")
+
+    competitors = query_gemini_llm(summary)
+    if not competitors:
+        competitors = [{"name": "No Sectors", "competitors": ["No competitors found."]}]
+
+    all_competitors = [comp for sector in competitors for comp in sector["competitors"]]
+    top_competitors = get_top_competitors(all_competitors)
+
+    return jsonify(
+        success=True,
+        description=summary,
+        ticker=ticker,
+        stock_prices=stock_prices,
+        time_labels=time_labels,
+        competitors=competitors,
+        top_competitors=top_competitors,
+    )
+
+# Initialize database
+with app.app_context():
+    db.create_all()
+
+if __name__ == "__main__":
+    app.run(debug=True)

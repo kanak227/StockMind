@@ -5,38 +5,49 @@ body {
   color: #c9d1d9;
 }
 
+/* Header Styles */
 header {
-  display: flex;
-  flex-direction: column;
   position: fixed;
   width: 100%;
-  padding: 20px;
+  padding: 10px 20px;
   background: linear-gradient(90deg, #3d41ff, #5ab2ff);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
   z-index: 1000;
+  display: flex;
+  justify-content: space-between; /* This ensures logo left, auth right */
+  align-items: center;
 }
 
 .top-header {
+  width: 100%;
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
 }
 
 .logo {
-  font-size: 2em;
+  font-size: 1.8em; /* Slightly reduced from 2em */
   font-weight: 600;
   color: #ffffff;
+  white-space: nowrap;
 }
+
+
+
+
+
 
 /* Glowing Tagline with Slide-In Transition */
 /* Glowing Tagline with Slide-In Transition */
 .tagline {
   font-size: 1.2em;
   color: #ffffff;
+  margin-left: 10px; /* Reduced space between logo and tagline */
   animation: slideIn 1.5s ease-in-out, glow 3s infinite alternate;
-  text-shadow: 0 0 5px #54daf5, 0 0 10px #54daf5, 0 0 20px #54daf5, 0 0 40px #54daf5, 0 0 60px #54daf5;
-  margin-right: 50px;
-/* Starts invisible for slide-in effect */
+  text-shadow: 0 0 5px #54daf5, 0 0 10px #54daf5;
+  display: inline-block; /* Makes it sit flush with logo */
+  vertical-align: middle; /* Aligns with logo text */
+  white-space: nowrap;
 }
 
 /* Glow Animation */
@@ -229,4 +240,149 @@ footer .social-icons a {
 
 footer .social-icons a:hover {
   color: #5ab2ff;
+}
+
+
+/* Auth styles */
+.auth-container {
+  max-width: 400px;
+  margin: 50px auto;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.auth-container h2 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.auth-container input {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.auth-container button {
+  width: 100%;
+  padding: 10px;
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.auth-container button:hover {
+  background: #45a049;
+}
+
+.auth-links {
+  text-align: center;
+  margin-top: 15px;
+}
+
+.flash-message {
+  color: red;
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+#auth-status {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}
+
+/* Auth section styles */
+.auth-section {
+  margin-left: 0; /* Remove auto margin */
+  padding-right: 20px; /* Add some padding from right edge */
+}
+
+.welcome-msg {
+  color: white;
+  font-size: 0.9em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.logout-btn, .login-btn {
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.logout-btn {
+  padding: 5px 10px;
+  background-color: #5a0600;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  white-space: nowrap;
+  min-width: 70px; /* Ensures button doesn't get too narrow */
+}
+
+
+
+.logout-btn:hover {
+  background-color: #d32f2f;
+}
+
+.login-btn {
+  padding: 5px 10px;
+  background-color: #2a1e6d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.login-btn:hover {
+  background-color: #4230b5;
+}
+
+
+/* Flash messages */
+.flash-messages {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.flash-success {
+  background-color: #4CAF50;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.flash-error {
+  background-color: #f44336;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.header-btn{
+  margin-right: 20px;
+  text-decoration: none;
+  padding: 10px 20px;
 }

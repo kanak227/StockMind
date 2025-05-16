@@ -1,20 +1,46 @@
-<!DOCTYPE html> 
-<html lang="en"> 
-<head> 
-  <meta charset="UTF-8"> 
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
-  <title>StockMind AI - Equity Clustering</title> 
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet"> 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"> 
-</head> 
-<body> 
-  <header> 
-    <div class="top-header"> 
-      <div class="logo">StockMind</div> 
-      <div class="tagline">Smarter Insights, Sharper Valuation</div> 
-    </div> 
-  </header> 
- 
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StockMind AI - Equity Clustering</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="flash-messages">
+    {% for category, message in messages %}
+    <div class="flash-{{ category }}">
+      {{ message }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+
+ <header>
+  <div class="top-header">
+    <div class="logo">StockMind</div>
+    <div class="tagline">AI-Driven Equity Analysis</div>
+    <div class="auth-section">
+      {% if session.get('username') %}
+      <span class="welcome-msg">Welcome, {{ session.get('username') }}</span>
+      <a class="logout-btn header-btn" href="{{url_for('logout')}}">
+        Logout
+      </a>
+      {% else %}
+      <a class="login-btn header-btn" href="{{url_for('accessAccount')}}">
+        Login
+      </a>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
   <section class="hero"> 
     <div class="hero-content"> 
       <h3>AI-Driven Equity Clustering</h3> 
@@ -226,3 +252,11 @@
   </script> 
 </body> 
 </html>
+
+  
+
+ 
+
+    
+
+    
