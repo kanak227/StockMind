@@ -81,6 +81,9 @@
     const graphSection = document.getElementById('graphSection'); 
     const competitorsSection = document.getElementById('competitorsSection'); 
     const topCompetitorsSection = document.getElementById('topCompetitorsSection'); 
+
+    let stockChartInstance = null;
+    let topCompetitorsChartInstance = null;
  
     companyForm.addEventListener('submit', async (e) => { 
       e.preventDefault(); 
@@ -148,11 +151,14 @@
  
     function renderGraph(stockPrices, timeLabels) { 
       const ctx = document.getElementById('stockGraph').getContext('2d'); 
+      if (stockChartInstance) { 
+        stockChartInstance.destroy(); 
+      }
       const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height); 
       gradient.addColorStop(0, 'rgba(75, 192, 192, 0.6)'); 
       gradient.addColorStop(1, 'rgba(75, 192, 192, 0)'); 
  
-      new Chart(ctx, { 
+      stockChartInstance = new Chart(ctx, { 
         type: 'line', 
         data: { 
           labels: timeLabels, 
@@ -180,11 +186,15 @@
  
     function renderTopCompetitorsGraph(topCompetitors) { 
       const ctx = document.getElementById('topCompetitorsGraph').getContext('2d'); 
+      if (topCompetitorsChartInstance) { 
+        topCompetitorsChartInstance.destroy(); 
+      }
       const datasets = topCompetitors.map((comp, index) => { 
         const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height); 
         gradient.addColorStop(0, `hsl(${index * 120}, 70%, 50%)`); 
         gradient.addColorStop(1, `rgba(${index * 40}, ${index * 60}, ${index * 80}, 0.1)`); 
  
+        // Use the actual stock prices from backend (should have variation)
         return { 
           label: comp.name, 
           data: comp.stock_prices, 
@@ -195,7 +205,7 @@
         }; 
       }); 
        
-      new Chart(ctx, { 
+      topCompetitorsChartInstance = new Chart(ctx, { 
         type: 'line', 
         data: { 
           labels: topCompetitors[0].time_labels, 
@@ -213,6 +223,6 @@
         }, 
       }); 
     } 
-</script> 
+  </script> 
 </body> 
 </html>

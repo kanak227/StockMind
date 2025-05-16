@@ -77,12 +77,13 @@ def fetch_wikipedia_summary(company_name):
         return None, f"Error fetching Wikipedia summary: {str(e)}" 
     return None, "No Wikipedia page found for the given company." 
  
+
 def fetch_stock_price(ticker): 
     try: 
         # Set a timeout for the request
         stock = yf.Ticker(ticker)
-        # Use a shorter period (1mo instead of 3mo) for faster response
-        history = stock.history(period="1mo")
+        # Use a longer period (3mo instead of 1mo) for more detailed response
+        history = stock.history(period="3mo")
         
         if history.empty:
             print(f"No stock price data found for {ticker}")
@@ -90,9 +91,9 @@ def fetch_stock_price(ticker):
             import datetime
             import random
             today = datetime.datetime.now()
-            time_labels = [(today - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)]
+            time_labels = [(today - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(90, 0, -1)]
             base_price = 100.0
-            stock_prices = [round(base_price + random.uniform(-10, 10), 2) for _ in range(30)]
+            stock_prices = [round(base_price + random.uniform(-10, 10), 2) for _ in range(90)]
             return stock_prices, time_labels
             
         time_labels = history.index.strftime('%Y-%m-%d').tolist() 
@@ -104,12 +105,12 @@ def fetch_stock_price(ticker):
         import datetime
         import random
         today = datetime.datetime.now()
-        time_labels = [(today - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)]
+        time_labels = [(today - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(90, 0, -1)]
         base_price = 100.0
-        stock_prices = [round(base_price + random.uniform(-10, 10), 2) for _ in range(30)]
+        stock_prices = [round(base_price + random.uniform(-10, 10), 2) for _ in range(90)]
         return stock_prices, time_labels
 
- 
+
 def get_ticker_from_alpha_vantage(company_name): 
     # Check if company is in our cache first
     company_lower = company_name.lower()
@@ -160,8 +161,8 @@ def fetch_market_cap(ticker):
 def get_stock_price_for_competitor(ticker): 
     try: 
         stock = yf.Ticker(ticker) 
-        # Use a shorter period (1mo instead of 3mo) for faster response
-        history = stock.history(period="1mo") 
+        # Use a longer period (3mo instead of 1mo) for more detailed response
+        history = stock.history(period="3mo") 
         
         if history.empty:
             print(f"No stock price data found for competitor {ticker}")
@@ -169,9 +170,9 @@ def get_stock_price_for_competitor(ticker):
             import datetime
             import random
             today = datetime.datetime.now()
-            time_labels = [(today - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)]
+            time_labels = [(today - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(90, 0, -1)]
             base_price = 100.0
-            stock_prices = [round(base_price + random.uniform(-10, 10), 2) for _ in range(30)]
+            stock_prices = [round(base_price + random.uniform(-10, 10), 2) for _ in range(90)]
             return stock_prices, time_labels
             
         time_labels = history.index.strftime('%Y-%m-%d').tolist() 
@@ -183,10 +184,10 @@ def get_stock_price_for_competitor(ticker):
         import datetime
         import random
         today = datetime.datetime.now()
-        time_labels = [(today - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)]
+        time_labels = [(today - datetime.timedelta(days=i)).strftime('%Y-%m-%d') for i in range(90, 0, -1)]
         base_price = 100.0
-        stock_prices = [round(base_price + random.uniform(-10, 10), 2) for _ in range(30)]
-        return stock_prices, time_labels 
+        stock_prices = [round(base_price + random.uniform(-10, 10), 2) for _ in range(90)]
+        return stock_prices, time_labels
  
 def get_top_competitors(competitors): 
     competitor_data = [] 
@@ -218,10 +219,16 @@ def get_top_competitors(competitors):
     if not competitor_data:
         print("No valid competitor data found, using fallback data")
         # Create some fallback data with mock values
+        import random
         for i, comp in enumerate(fallback_competitors):
             ticker = comp[0:3].upper()  # Just use first 3 letters as ticker
             mock_market_cap = 1000000000 * (3-i)  # Decreasing market caps
-            mock_prices = [100 + i*10 + j for j in range(30)]  # Mock price data
+            # Add random walk for mock prices to avoid straight lines
+            mock_prices = []
+            price = 100 + i*10
+            for j in range(30):
+                price += random.uniform(-2, 2)
+                mock_prices.append(round(price, 2))
             mock_dates = [f"2025-04-{j+1:02d}" for j in range(30)]  # Mock dates
             
             competitor_data.append({
@@ -320,29 +327,34 @@ def analyze_company():
      
         _, summary = fetch_wikipedia_summary(company_name) 
         if not summary: 
-            # Use a fallback description if Wikipedia fails
             summary = f"{company_name} is a company operating in various sectors including technology and finance."
             print(f"Using fallback description for {company_name}")
      
         ticker = get_ticker_from_alpha_vantage(company_name) 
         if not ticker: 
-            # This shouldn't happen with our updated function, but just in case
             ticker = company_name.split()[0].upper()
             print(f"Using fallback ticker {ticker} for {company_name}")
      
         stock_prices, time_labels = fetch_stock_price(ticker) 
         if not stock_prices or not time_labels: 
-            # Create mock stock data if we can't fetch real data
             print(f"Using mock stock data for {ticker}")
-            stock_prices = [100 + i for i in range(30)]  # Mock price data
-            time_labels = [f"2025-04-{i+1:02d}" for i in range(30)]  # Mock dates
+            stock_prices = [100 + i for i in range(30)]
+            time_labels = [f"2025-04-{i+1:02d}" for i in range(30)]
      
         competitors = query_gemini_llm(summary) 
         if not competitors: 
             competitors = [{"name": "No Sectors", "competitors": ["No competitors found."]}] 
      
-        all_competitors = [comp for sector in competitors for comp in sector["competitors"]] 
-        top_competitors = get_top_competitors(all_competitors) 
+        # Use only the first sector's competitors for top competitors
+        if competitors and competitors[0].get("competitors"):
+            relevant_competitors = competitors[0]["competitors"]
+        else:
+            relevant_competitors = []
+        print(f"Relevant competitors for {company_name}: {relevant_competitors}")
+        top_competitors = get_top_competitors(relevant_competitors)
+        print(f"Top competitors data for {company_name}:")
+        for comp in top_competitors:
+            print(f"  {comp['name']} | Ticker: {comp['ticker']} | Market Cap: {comp['market_cap']} | Last Price: {comp['stock_price']}")
      
         return jsonify( 
             success=True, 
@@ -355,7 +367,6 @@ def analyze_company():
         )
     except Exception as e:
         print(f"Error in analyze_company: {e}")
-        # Return a more helpful error message
         return jsonify(
             success=False, 
             error="An error occurred while analyzing the company. Please try again with a different company name."
