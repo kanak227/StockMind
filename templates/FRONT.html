@@ -47,13 +47,44 @@
       <p>Identify comparable peer companies using Large Language Models (LLMs) for precise equity valuation.</p> 
     </div> 
   </section> 
- 
+
+  <!-- Spinner overlay (improved UI) -->
+  <div id="loading-spinner" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(30,30,40,0.25);z-index:9999;">
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">
+      <div style="display:inline-block;width:60px;height:60px;">
+        <div style="
+          box-sizing: border-box;
+          display: block;
+          width: 60px;
+          height: 60px;
+          border: 6px solid #1abc9c;
+          border-radius: 50%;
+          border-top: 6px solid #fff;
+          animation: spin 1s linear infinite;
+          box-shadow: 0 2px 16px rgba(26,188,156,0.15);
+        "></div>
+      </div>
+      <div style="margin-top:18px;font-size:1.2em;color:#222;font-weight:500;letter-spacing:0.02em;">
+        Fetching data, please wait...
+      </div>
+    </div>
+  </div>
+  <style>
+    @keyframes spin {
+      0% { transform: rotate(0deg);}
+      100% { transform: rotate(360deg);}
+    }
+    /* Optional: prevent scroll when spinner is active */
+    body.loading {
+      overflow: hidden;
+    }
+  </style>
+
   <section id="input" class="section"> 
     <h2>Analyze a Company</h2> 
     <form id="company-form"> 
       <input type="text" id="companyName" placeholder="Enter Company Name..." required> 
       <button type="submit">Analyze</button> 
-      <p id="loading" style="display: none;">Processing... Please wait.</p> 
     </form> 
   </section> 
  
@@ -99,7 +130,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
   <script> 
     const companyForm = document.getElementById('company-form'); 
-    const loadingText = document.getElementById('loading'); 
     const resultsSection = document.getElementById('results'); 
     const descriptionSection = document.getElementById('descriptionSection'); 
     const tickerSection = document.getElementById('tickerSection'); 
@@ -107,9 +137,19 @@
     const graphSection = document.getElementById('graphSection'); 
     const competitorsSection = document.getElementById('competitorsSection'); 
     const topCompetitorsSection = document.getElementById('topCompetitorsSection'); 
+    const loadingSpinner = document.getElementById('loading-spinner');
 
     let stockChartInstance = null;
     let topCompetitorsChartInstance = null;
+
+    function showSpinner() { 
+      loadingSpinner.style.display = 'block'; 
+      document.body.classList.add('loading');
+    }
+    function hideSpinner() { 
+      loadingSpinner.style.display = 'none'; 
+      document.body.classList.remove('loading');
+    }
  
     companyForm.addEventListener('submit', async (e) => { 
       e.preventDefault(); 
@@ -118,8 +158,8 @@
         alert('Enter a company name!'); 
         return; 
       } 
- 
-      loadingText.style.display = 'block'; 
+
+      showSpinner();
  
       try {
         // Get the current hostname and use it for the API call
@@ -171,7 +211,7 @@
         console.error('Error:', error); 
         alert('Error fetching data.'); 
       } finally { 
-        loadingText.style.display = 'none'; 
+        hideSpinner();
       } 
     }); 
  
@@ -253,10 +293,9 @@
 </body> 
 </html>
 
-  
 
- 
 
-    
 
-    
+
+
+
