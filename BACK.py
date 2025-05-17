@@ -286,13 +286,22 @@ def get_top_competitors(competitors):
     
     # Use the provided competitors or fallback if empty
     competitors_to_process = set(competitors) if competitors else fallback_competitors
- 
+
     for competitor in competitors_to_process:  # Remove duplicate names 
         ticker = get_ticker_from_alpha_vantage(competitor) 
         if ticker and ticker not in processed_tickers: 
             market_cap = fetch_market_cap(ticker) 
             stock_prices, time_labels = get_stock_price_for_competitor(ticker) 
-            if market_cap and stock_prices and time_labels: 
+            # Only add if we have real data (not mock/fallback)
+            if (
+                market_cap is not None and
+                stock_prices and time_labels and
+                not (
+                    len(stock_prices) == 30 and
+                    all(isinstance(p, float) for p in stock_prices) and
+                    all(d.startswith("2025-04-") for d in time_labels)
+                )
+            ):
                 competitor_data.append({ 
                     "name": competitor, 
                     "ticker": ticker, 
@@ -309,7 +318,7 @@ def get_top_competitors(competitors):
         # Create some fallback data with mock values
         import random
         for i, comp in enumerate(fallback_competitors):
-            ticker = comp[0:3].upper()  # Just use first 3 letters as ticker
+            ticker = TICKER_CACHE.get(comp.lower(), comp[0:3].upper())
             mock_market_cap = 1000000000 * (3-i)  # Decreasing market caps
             # Add random walk for mock prices to avoid straight lines
             mock_prices = []
@@ -327,28 +336,42 @@ def get_top_competitors(competitors):
                 "time_labels": mock_dates,
                 "stock_price": mock_prices[-1],
             })
- 
+
     # Sort competitors by market cap and return the top 3 
     top_competitors = sorted(competitor_data, key=lambda x: x["market_cap"], reverse=True)[:3] 
     return top_competitors 
- 
+
 def query_gemini_llm(description): 
     try: 
         # Check if client is defined (it might not be if API key is invalid)
         if 'client' not in globals():
             print("Gemini client not initialized, using fallback data")
-            # Return fallback data
+            # Improved fallback: suggest other companies from TICKER_CACHE
+            company = description.split()[0].lower() if description else "unknown"
+            # Try to match company to a real ticker/company in TICKER_CACHE
+            matched = None
+            for key in TICKER_CACHE:
+                if company in key:
+                    matched = key
+                    break
+            # Use sector-specific fallback if possible
+            if matched == "tesla":
+                competitors = ["Ford", "General Motors", "Nio", "Lucid Motors"]
+            elif matched == "apple":
+                competitors = ["Samsung", "Microsoft", "Google", "Huawei"]
+            elif matched == "microsoft":
+                competitors = ["Apple", "Google", "Amazon", "IBM"]
+            else:
+                all_companies = list(TICKER_CACHE.keys())
+                competitors = [c.title() for c in all_companies if c != company][:4]
+                if not competitors:
+                    competitors = ["Microsoft", "Apple", "Amazon", "IBM"]
             return [
                 {
-                    "name": "Technology Sector:",
-                    "competitors": ["Microsoft", "Apple", "IBM", "Oracle"]
-                },
-                {
-                    "name": "Financial Sector:",
-                    "competitors": ["JPMorgan Chase", "Bank of America", "Wells Fargo", "Citigroup"]
+                    "name": f"{company.title()} Sector:",
+                    "competitors": competitors
                 }
             ]
-            
         prompt = f""" 
         Provide a structured list of sectors and their competitors for the following company description: 
         {description[:500]} 
@@ -357,29 +380,44 @@ def query_gemini_llm(description):
             Competitor 1 
             Competitor 2 
             Competitor 3 
- 
+
         Leave a line after each sector. Do not use bullet points. 
         """ 
         
         try:
+            print("Calling Gemini API for competitors...")
             response = client.models.generate_content( 
                 model="gemini-1.5-flash", contents=prompt 
             ) 
+            print("Gemini API response:", response)
             content = response.candidates[0].content.parts[0].text
+            print("Gemini API content:", content)
         except Exception as api_error:
             print(f"Error calling Gemini API: {api_error}")
-            # Return fallback data
+            # Improved fallback: suggest other companies from TICKER_CACHE
+            company = description.split()[0].lower() if description else "unknown"
+            matched = None
+            for key in TICKER_CACHE:
+                if company in key:
+                    matched = key
+                    break
+            if matched == "tesla":
+                competitors = ["Ford", "General Motors", "Nio", "Lucid Motors"]
+            elif matched == "apple":
+                competitors = ["Samsung", "Microsoft", "Google", "Huawei"]
+            elif matched == "microsoft":
+                competitors = ["Apple", "Google", "Amazon", "IBM"]
+            else:
+                all_companies = list(TICKER_CACHE.keys())
+                competitors = [c.title() for c in all_companies if c != company][:4]
+                if not competitors:
+                    competitors = ["Microsoft", "Apple", "Amazon", "IBM"]
             return [
                 {
-                    "name": "Technology Sector:",
-                    "competitors": ["Microsoft", "Apple", "IBM", "Oracle"]
-                },
-                {
-                    "name": "Financial Sector:",
-                    "competitors": ["JPMorgan Chase", "Bank of America", "Wells Fargo", "Citigroup"]
+                    "name": f"{company.title()} Sector:",
+                    "competitors": competitors
                 }
             ]
-            
         sectors = [] 
         for line in content.split("\n\n"): 
             lines = line.strip().split("\n") 
@@ -390,81 +428,84 @@ def query_gemini_llm(description):
         return sectors 
     except Exception as e: 
         print(f"Error in query_gemini_llm: {e}")
-        # Return fallback data
+        # Improved fallback: suggest other companies from TICKER_CACHE
+        company = description.split()[0].lower() if description else "unknown"
+        matched = None
+        for key in TICKER_CACHE:
+            if company in key:
+                matched = key
+                break
+        if matched == "tesla":
+            competitors = ["Ford", "General Motors", "Nio", "Lucid Motors"]
+        elif matched == "apple":
+            competitors = ["Samsung", "Microsoft", "Google", "Huawei"]
+        elif matched == "microsoft":
+            competitors = ["Apple", "Google", "Amazon", "IBM"]
+        else:
+            all_companies = list(TICKER_CACHE.keys())
+            competitors = [c.title() for c in all_companies if c != company][:4]
+            if not competitors:
+                competitors = ["Microsoft", "Apple", "Amazon", "IBM"]
         return [
             {
-                "name": "Technology Sector:",
-                "competitors": ["Microsoft", "Apple", "IBM", "Oracle"]
-            },
-            {
-                "name": "Financial Sector:",
-                "competitors": ["JPMorgan Chase", "Bank of America", "Wells Fargo", "Citigroup"]
+                "name": f"{company.title()} Sector:",
+                "competitors": competitors
             }
         ]
- 
+
 @app.route("/") 
 def home(): 
     return render_template("FRONT.html") 
  
 @app.route("/analyze_company", methods=["GET"]) 
 def analyze_company(): 
-    try:
-        company_name = request.args.get("company_name") 
-        if not company_name: 
-            return jsonify(success=False, error="No company name provided.") 
+    if not userAuthenticate():
+        return render_template("FRONT.html", error = "Please Sign In to continue")
+    company_name = request.args.get("company_name") 
+    if not company_name: 
+        return jsonify(success=False, error="No company name provided.") 
      
-        _, summary = fetch_wikipedia_summary(company_name) 
-        if not summary: 
-            summary = f"{company_name} is a company operating in various sectors including technology and finance."
-            print(f"Using fallback description for {company_name}")
+    _, summary = fetch_wikipedia_summary(company_name) 
+    if not summary or summary.startswith("Error fetching Wikipedia summary"):
+        summary = f"{company_name} is a company operating in various sectors including technology and finance."
+        print(f"Using fallback description for {company_name}")
      
-        ticker = get_ticker_from_alpha_vantage(company_name) 
-        if not ticker: 
-            ticker = company_name.split()[0].upper()
-            print(f"Using fallback ticker {ticker} for {company_name}")
+    ticker = get_ticker_from_alpha_vantage(company_name) 
+    if not ticker:
+        ticker = company_name.split()[0].upper()
+        print(f"Using fallback ticker {ticker} for {company_name}")
      
-        stock_prices, time_labels = fetch_stock_price(ticker) 
-        if not stock_prices or not time_labels: 
-            print(f"Using mock stock data for {ticker}")
-            stock_prices = [100 + i for i in range(30)]
-            time_labels = [f"2025-04-{i+1:02d}" for i in range(30)]
+    stock_prices, time_labels = fetch_stock_price(ticker) 
+    if not stock_prices or not time_labels:
+        print(f"Using mock stock data for {ticker}")
+        stock_prices = [100 + i for i in range(30)]
+        time_labels = [f"2025-04-{i+1:02d}" for i in range(30)]
      
-        competitors = query_gemini_llm(summary) 
-        if not competitors: 
-            competitors = [{"name": "No Sectors", "competitors": ["No competitors found."]}] 
+    competitors = query_gemini_llm(summary) 
+    if not competitors: 
+        competitors = [{"name": "No Sectors", "competitors": ["No competitors found."]}] 
      
-        # Use only the first sector's competitors for top competitors
-        if competitors and competitors[0].get("competitors"):
-            relevant_competitors = competitors[0]["competitors"]
-        else:
-            relevant_competitors = []
-        print(f"Relevant competitors for {company_name}: {relevant_competitors}")
-        top_competitors = get_top_competitors(relevant_competitors)
-        print(f"Top competitors data for {company_name}:")
-        for comp in top_competitors:
-            print(f"  {comp['name']} | Ticker: {comp['ticker']} | Market Cap: {comp['market_cap']} | Last Price: {comp['stock_price']}")
+    # Use only the first sector's competitors for top competitors
+    if competitors and competitors[0].get("competitors"):
+        relevant_competitors = competitors[0]["competitors"]
+    else:
+        relevant_competitors = []
+    print(f"Relevant competitors for {company_name}: {relevant_competitors}")
+    top_competitors = get_top_competitors(relevant_competitors)
+    print(f"Top competitors data for {company_name}:")
+    for comp in top_competitors:
+        print(f"  {comp['name']} | Ticker: {comp['ticker']} | Market Cap: {comp['market_cap']} | Last Price: {comp['stock_price']}")
      
-        return jsonify( 
-            success=True, 
-            description=summary, 
-            ticker=ticker, 
-            stock_prices=stock_prices, 
-            time_labels=time_labels, 
-            competitors=competitors, 
-            top_competitors=top_competitors, 
-        )
-    except Exception as e:
-        print(f"Error in analyze_company: {e}")
-        return jsonify(
-            success=False, 
-            error="An error occurred while analyzing the company. Please try again with a different company name."
-        )
- 
-if __name__ == "__main__": 
-    # Get port and host from environment variables
-    port = int(os.getenv("PORT", 12001))
-    host = os.getenv("HOST", "0.0.0.0")
-    app.run(host=host, port=port, debug=True)
+    return jsonify( 
+        success=True, 
+        description=summary, 
+        ticker=ticker, 
+        stock_prices=stock_prices, 
+        time_labels=time_labels, 
+        competitors=competitors, 
+        top_competitors=top_competitors, 
+    )
+
 def userAuthenticate():
     '''use inside route functions to block logged out user'''
     if "username" in session:
@@ -541,55 +582,42 @@ def verify():
 def logout():
     session.pop("username", None)
     return redirect(url_for('home'))
+
 @app.route('/access-account')
 def accessAccount():
     return render_template("access-account.html")
 
-# Protect existing routes
-@app.route("/")
-def home():
-    return render_template("FRONT.html")
+# Your logs show two main issues:
 
-@app.route("/analyze_company", methods=["GET"])
-def analyze_company():
-    if not userAuthenticate():
-        return render_template("FRONT.html", error = "Please Sign In to continue")
-    company_name = request.args.get("company_name")
-    if not company_name:
-        return jsonify(success=False, error="No company name provided.")
+# 1. Gemini API error:
+# Error calling Gemini API: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'API key not valid. Please pass a valid API key.' ...}}
+# --> Your Gemini API key is invalid. You must set a valid Gemini API key in your environment or code.
 
-    _, summary = fetch_wikipedia_summary(company_name)
-    if not summary:
-        return jsonify(success=False, error="Could not find company description.")
+# 2. yfinance errors:
+# ERROR:yfinance:429 Client Error: Too Many Requests for url: ...
+# --> Yahoo Finance (yfinance) is rate-limiting your requests (HTTP 429). This means you are making too many requests in a short time, or your IP is temporarily blocked.
 
-    ticker = get_ticker_from_alpha_vantage(company_name)
-    if not ticker:
-        return jsonify(success=False, error="Could not find ticker symbol.")
+# How to fix:
 
-    stock_prices, time_labels = fetch_stock_price(ticker)
-    if not stock_prices or not time_labels:
-        return jsonify(success=False, error="Could not fetch stock prices.")
+# 1. Gemini API key:
+# - Get a valid Gemini API key from Google AI Studio or your provider.
+# - Set it in your .env file as GEMINI_API_KEY=your_real_key or directly in your code.
+# - Restart your Flask app after updating the key.
 
-    competitors = query_gemini_llm(summary)
-    if not competitors:
-        competitors = [{"name": "No Sectors", "competitors": ["No competitors found."]}]
+# 2. yfinance rate limiting:
+# - Reduce the frequency of your requests (add caching, sleep, or batching).
+# - Avoid rapid repeated reloads/testing.
+# - Consider using another data provider if you need higher limits.
+# - For development, rely on your mock data fallback if rate-limited.
 
-    all_competitors = [comp for sector in competitors for comp in sector["competitors"]]
-    top_competitors = get_top_competitors(all_competitors)
-
-    return jsonify(
-        success=True,
-        description=summary,
-        ticker=ticker,
-        stock_prices=stock_prices,
-        time_labels=time_labels,
-        competitors=competitors,
-        top_competitors=top_competitors,
-    )
+# No code changes are needed for these issues, but you must update your API key and/or slow down yfinance requests.
 
 # Initialize database
 with app.app_context():
     db.create_all()
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Get port and host from environment variables
+    port = int(os.getenv("PORT", 12001))
+    host = os.getenv("HOST", "0.0.0.0")
+    app.run(host=host, port=port, debug=True)
