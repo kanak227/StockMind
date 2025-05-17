@@ -502,45 +502,59 @@ def analyze_company():
     if not company_name: 
         return jsonify(success=False, error="No company name provided.") 
 
-    # Parallelize Wikipedia and Gemini fetches
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        wiki_future = executor.submit(retry_with_timeout, fetch_wikipedia_summary, (company_name,), {}, 2, 10)
-        # We'll get summary from Wikipedia, then pass to Gemini, so Gemini fetch is after Wikipedia
-        wiki_success, wiki_result = wiki_future.result()
+    # Parallelize all fetches with reduced timeouts
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        wiki_future = executor.submit(retry_with_timeout, fetch_wikipedia_summary, (company_name,), {}, 1, 3)
+        ticker_future = executor.submit(get_ticker_from_alpha_vantage, company_name)
+        # Start stock price fetch with a guessed ticker (will update if needed)
+        guessed_ticker = company_name.split()[0].upper()
+        stock_future = executor.submit(retry_with_timeout, fetch_stock_price, (guessed_ticker,), {}, 1, 3)
+
+        # Get Wikipedia summary (fast fallback)
+        wiki_success, wiki_result = wiki_future.result(timeout=4)
         if not wiki_success or not wiki_result or (isinstance(wiki_result, tuple) and wiki_result[1].startswith("Error")):
             summary = f"{company_name} is a company operating in various sectors including technology and finance."
-            print(f"Using fallback description for {company_name} due to Wikipedia error: {wiki_result}")
         else:
             _, summary = wiki_result
 
-        # Now fetch Gemini competitors in parallel (with retries and timeout)
-        gemini_future = executor.submit(retry_with_timeout, query_gemini_llm, (summary,), {}, 2, 10)
-        gemini_success, competitors = gemini_future.result()
+        # Start Gemini fetch in parallel (use summary, fallback if slow)
+        gemini_future = executor.submit(retry_with_timeout, query_gemini_llm, (summary,), {}, 1, 4)
+
+        # Get ticker (fast fallback)
+        try:
+            ticker = ticker_future.result(timeout=3)
+        except Exception:
+            ticker = guessed_ticker
+        if not ticker:
+            ticker = guessed_ticker
+
+        # Get stock price with correct ticker (if different from guessed)
+        if ticker != guessed_ticker:
+            stock_future = executor.submit(retry_with_timeout, fetch_stock_price, (ticker,), {}, 1, 3)
+        try:
+            stock_success, stock_result = stock_future.result(timeout=4)
+        except Exception:
+            stock_success, stock_result = False, None
+        if not stock_success or not stock_result:
+            stock_prices = [100 + i for i in range(30)]
+            time_labels = [f"2025-04-{i+1:02d}" for i in range(30)]
+        else:
+            stock_prices, time_labels = stock_result
+
+        # Get Gemini competitors (fast fallback)
+        try:
+            gemini_success, competitors = gemini_future.result(timeout=4)
+        except Exception:
+            gemini_success, competitors = False, None
         if not gemini_success or not competitors: 
             competitors = [{"name": "No Sectors", "competitors": ["No competitors found."]}]
-            print(f"Using fallback competitors for {company_name} due to Gemini error: {competitors}")
-
-    ticker = get_ticker_from_alpha_vantage(company_name) 
-    if not ticker:
-        ticker = company_name.split()[0].upper()
-        print(f"Using fallback ticker {ticker} for {company_name}")
-
-    stock_prices, time_labels = fetch_stock_price(ticker) 
-    if not stock_prices or not time_labels:
-        print(f"Using mock stock data for {ticker}")
-        stock_prices = [100 + i for i in range(30)]
-        time_labels = [f"2025-04-{i+1:02d}" for i in range(30)]
 
     # Use only the first sector's competitors for top competitors
     if competitors and competitors[0].get("competitors"):
         relevant_competitors = competitors[0]["competitors"]
     else:
         relevant_competitors = []
-    print(f"Relevant competitors for {company_name}: {relevant_competitors}")
     top_competitors = get_top_competitors(relevant_competitors)
-    print(f"Top competitors data for {company_name}:")
-    for comp in top_competitors:
-        print(f"  {comp['name']} | Ticker: {comp['ticker']} | Market Cap: {comp['market_cap']} | Last Price: {comp['stock_price']}")
 
     return jsonify( 
         success=True, 
